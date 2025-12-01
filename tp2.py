@@ -4,7 +4,6 @@ import networkx as nx
 
 class ReseauDePetri:
     """Classe pour représenter et simuler un Réseau de Petri"""
-    
     def __init__(self, P, T, Pre, Post, M0):
         self.P = P
         self.T = T
@@ -99,7 +98,7 @@ class ReseauDePetri:
                 label=t
             )
         
-        plt.figure(figsize=(14, 10))
+        plt.figure(figsize=(10, 10))
         pos = nx.spring_layout(G, k=2.5, iterations=50, seed=42)
         
         nx.draw_networkx_nodes(G, pos, node_color='lightblue', node_size=2500, alpha=0.9)

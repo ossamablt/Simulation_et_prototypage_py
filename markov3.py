@@ -14,7 +14,7 @@ def Msim(i, P, n):
     """
     nb_etats = len(P)
     
-    # Initialisation: on part de l'état i avec certitude
+    # Initialisation: on part de l' i avec certitude
     pi = [0.0] * nb_etats
     pi[i] = 1.0
     
@@ -114,10 +114,10 @@ def R_Stationnaire(P, epsilon=1e-10):
     return pi
 
 
-# ============= TESTS =============
+# ============= TESTS ==============
 
 print("=" * 60)
-print("EXEMPLE 1: Labyrinthe de la souris")
+print("1: Labyrinthe de la souris")
 print("=" * 60)
 
 P_labyrinthe = [
@@ -139,7 +139,7 @@ print(f"Probabilité d'atteindre la tanière (état 5): {round(pi_stat[4], 4)}")
 
 
 print("\n" + "=" * 60)
-print("EXEMPLE 2: Chaîne ergodique")
+print("2: Chaîne ergodique")
 print("=" * 60)
 
 P_ergodique = [
@@ -173,3 +173,28 @@ pi_7 = Msim(0, P_meteo, 7)
 
 print("\n" + "-" * 60)
 pi_stat_meteo = R_Stationnaire(P_meteo)
+
+
+
+
+
+# print("\n" + "=" * 60)
+# print("=" * 60)
+# print("=" * 60)
+# print("3: lawiist")
+# print("=" * 60)
+
+# tdEX = [
+#     [1/2,  1/2, 0],
+#     [1/2,  0, 1/2],
+#     [0,  1,  0]
+# ]
+
+# print("\nSimulation partant de l'état 0:")
+# pi_10 = Msim(0, tdEX, 10)
+
+# print("\n" + "-" * 60)
+# pi_stat_erg = R_Stationnaire(tdEX)
+
+# print(f"\nDistribution théorique: [3/8={3/8:.6f}, 1/4={1/4:.6f}, 3/8={3/8:.6f}]")
+# print(f"Distribution calculée:  [{pi_stat_erg[0]:.6f}, {pi_stat_erg[1]:.6f}, {pi_stat_erg[2]:.6f}]")
