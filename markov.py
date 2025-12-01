@@ -50,9 +50,9 @@ def simuler_trajectoire(i, P, n):
 
 if __name__ == "__main__":
     P = [
-        [7, 2, 1],
-        [3, 4, 3],
-        [2, 3, 5]
+        [0.7, 0.2, 0.1],
+        [0.3, 0.4, 0.3],
+        [0.2, 0.3, 0.5]
     ]
 
     print("=== Markov Chains ===")

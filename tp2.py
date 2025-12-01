@@ -1,4 +1,3 @@
-import numpy as np
 from collections import deque
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -7,287 +6,213 @@ class ReseauDePetri:
     """Classe pour représenter et simuler un Réseau de Petri"""
     
     def __init__(self, P, T, Pre, Post, M0):
-        """
-        Initialise un Réseau de Petri
-        
-        P: Liste des noms de places
-        T: Liste des noms de transitions
-        Pre: Matrice d'incidence avant (n x m)
-        Post: Matrice d'incidence arrière (n x m)
-        M0: Marquage initial (vecteur de taille n)
-        """
-        self.P = P  # Places
-        self.T = T  # Transitions
-        self.Pre = np.array(Pre)  # Matrice Pré
-        self.Post = np.array(Post)  # Matrice Post
-        self.M0 = np.array(M0)  # Marquage initial
-        self.C = self.Post - self.Pre  # Matrice d'incidence
-        
-        # Validation des dimensions
-        n = len(P)  # Nombre de places
-        m = len(T)  # Nombre de transitions
-        
-        assert self.Pre.shape == (n, m), "Dimension incorrecte pour Pre"
-        assert self.Post.shape == (n, m), "Dimension incorrecte pour Post"
-        assert len(M0) == n, "Dimension incorrecte pour M0"
+        self.P = P
+        self.T = T
+        self.Pre = Pre
+        self.Post = Post
+        self.M0 = M0
+        self.C = [[Post[i][j] - Pre[i][j] for j in range(len(T))] for i in range(len(P))]
     
-    def est_franchissable(self, M, t_index):
-        """
-        Vérifie si une transition t est franchissable pour le marquage M
-        
-        Condition: M >= Pre[:,t] (pour toutes les places)
-        """
-        return np.all(M >= self.Pre[:, t_index])
+    def est_franchissable(self, M, t):
+        """Vérifie si M >= Pre[:,t]"""
+        return all(M[i] >= self.Pre[i][t] for i in range(len(self.P)))
     
-    def transitions_franchissables(self, M):
-        """
-        Retourne la liste des indices des transitions franchissables pour M
-        """
-        franchissables = []
-        for t_idx in range(len(self.T)):
-            if self.est_franchissable(M, t_idx):
-                franchissables.append(t_idx)
-        return franchissables
+    def franchir(self, M, t):
+        """Retourne M' = M + C[:,t]"""
+        return [M[i] + self.C[i][t] for i in range(len(self.P))]
     
-    def franchir_transition(self, M, t_index):
-        """
-        Franchit la transition t à partir du marquage M
+    def RdPSim(self, sequence):
+        """Simule une séquence de transitions"""
+        M = self.M0[:]
+        marquages = [M[:]]
         
-        Retourne le nouveau marquage M' = M + C[:,t]
-        """
-        if not self.est_franchissable(M, t_index):
-            raise ValueError(f"Transition {self.T[t_index]} non franchissable!")
+        print(f"\n{'='*60}\nSIMULATION DU RÉSEAU DE PETRI\n{'='*60}")
+        print(f"Marquage initial M0 = {M}")
+        print(f"Places: {self.P}")
+        print(f"\nDéroulement de la séquence: {sequence}\n")
         
-        # Nouveau marquage selon l'équation: M' = M + C[:,t]
-        M_nouveau = M + self.C[:, t_index]
-        return M_nouveau
-    
-    def RdPSim(self, sequence_transitions):
-        """
-        Simule le franchissement d'une séquence de transitions
-        
-        sequence_transitions: Liste d'indices de transitions ou liste de noms
-        
-        Retourne: Liste des marquages successifs
-        """
-        marquages = [self.M0.copy()]
-        M_courant = self.M0.copy()
-        
-        print("=" * 60)
-        print("SIMULATION DU RÉSEAU DE PETRI")
-        print("=" * 60)
-        print(f"Marquage initial M0: {M_courant}")
-        print()
-        
-        for i, t in enumerate(sequence_transitions):
-            # Convertir le nom en indice si nécessaire
-            if isinstance(t, str):
-                t_idx = self.T.index(t)
-            else:
-                t_idx = t
+        for i, t_name in enumerate(sequence):
+            t = self.T.index(t_name)
             
-            print(f"Étape {i+1}: Franchissement de {self.T[t_idx]}")
+            print(f"Étape {i+1}: Tentative de franchissement de [{t_name}]")
             
-            # Vérifier si la transition est franchissable
-            if not self.est_franchissable(M_courant, t_idx):
-                print(f"  ❌ ERREUR: {self.T[t_idx]} n'est pas franchissable!")
-                print(f"  Marquage actuel: {M_courant}")
-                print(f"  Pré-conditions: {self.Pre[:, t_idx]}")
+            if not self.est_franchissable(M, t):
+                print(f"  ❌ {t_name} NON FRANCHISSABLE")
+                print(f"     Marquage actuel: {M}")
+                print(f"     Pré-conditions requises: {[self.Pre[k][t] for k in range(len(self.P))]}")
                 break
             
-            # Franchir la transition
-            M_courant = self.franchir_transition(M_courant, t_idx)
-            marquages.append(M_courant.copy())
-            
-            print(f"  ✓ Nouveau marquage: {M_courant}")
-            print()
+            M = self.franchir(M, t)
+            marquages.append(M[:])
+            print(f"  ✓ {t_name} franchie -> M{i+1} = {M}")
         
-        print("=" * 60)
-        print(f"Marquage final: {M_courant}")
-        print("=" * 60)
+        print(f"\n{'='*60}")
+        print(f"Marquage final: {M}")
+        print(f"{'='*60}\n")
         
         return marquages
     
-    def graphe_marquages_accessibles(self, max_marquages=1000):
-        """
-        Génère le graphe des marquages accessibles
+    def graphe_marquages_accessibles(self, max_marquages=100):
+        """Génère le graphe des marquages accessibles"""
+        marquages = {tuple(self.M0): 0}
+        file = deque([self.M0[:]])
+        arcs = []
+        idx = 0
         
-        Retourne: 
-        - marquages_accessibles: dictionnaire {tuple(marquage): indice}
-        - transitions_graphe: liste de (M_source, transition, M_dest)
-        """
-        print("\n" + "=" * 60)
-        print("GÉNÉRATION DU GRAPHE DES MARQUAGES ACCESSIBLES")
-        print("=" * 60)
-        
-        # Initialisation
-        M0_tuple = tuple(self.M0)
-        marquages_accessibles = {M0_tuple: 0}
-        marquages_a_explorer = deque([self.M0])
-        transitions_graphe = []
-        compteur = 0
-        
-        while marquages_a_explorer and compteur < max_marquages:
-            M_courant = marquages_a_explorer.popleft()
-            M_courant_tuple = tuple(M_courant)
+        while file and idx < max_marquages:
+            M = file.popleft()
+            M_tuple = tuple(M)
             
-            # Explorer toutes les transitions franchissables
-            for t_idx in self.transitions_franchissables(M_courant):
-                M_nouveau = self.franchir_transition(M_courant, t_idx)
-                M_nouveau_tuple = tuple(M_nouveau)
-                
-                # Ajouter le nouveau marquage s'il n'existe pas
-                if M_nouveau_tuple not in marquages_accessibles:
-                    compteur += 1
-                    marquages_accessibles[M_nouveau_tuple] = compteur
-                    marquages_a_explorer.append(M_nouveau)
-                
-                # Ajouter la transition au graphe
-                transitions_graphe.append((M_courant_tuple, self.T[t_idx], M_nouveau_tuple))
+            for t in range(len(self.T)):
+                if self.est_franchissable(M, t):
+                    M_new = self.franchir(M, t)
+                    M_new_tuple = tuple(M_new)
+                    
+                    if M_new_tuple not in marquages:
+                        idx += 1
+                        marquages[M_new_tuple] = idx
+                        file.append(M_new)
+                    
+                    arcs.append((M_tuple, self.T[t], M_new_tuple))
         
-        print(f"\n✓ Nombre de marquages accessibles: {len(marquages_accessibles)}")
-        print(f"✓ Nombre de transitions dans le graphe: {len(transitions_graphe)}")
+        print(f"\n{'='*60}\nGRAPHE DES MARQUAGES ACCESSIBLES\n{'='*60}")
+        print(f"Nombre de marquages accessibles: {len(marquages)}")
+        print(f"Nombre de transitions: {len(arcs)}\n")
         
-        # Afficher tous les marquages accessibles
-        print("\nMarquages accessibles:")
-        for marquage, idx in sorted(marquages_accessibles.items(), key=lambda x: x[1]):
-            print(f"  M{idx}: {list(marquage)}")
+        for m, i in sorted(marquages.items(), key=lambda x: x[1]):
+            print(f"  M{i} = {list(m)}")
         
-        return marquages_accessibles, transitions_graphe
+        print()
+        return marquages, arcs
     
-    def visualiser_graphe(self, marquages_accessibles, transitions_graphe):
-        """
-        Visualise le graphe des marquages accessibles avec matplotlib
-        """
+    def visualiser(self, marquages, arcs):
+        """Visualise le graphe avec NetworkX"""
         G = nx.DiGraph()
         
-        # Ajouter les nœuds
-        for marquage, idx in marquages_accessibles.items():
-            label = f"M{idx}\n{list(marquage)}"
-            G.add_node(label)
+        for m, i in marquages.items():
+            G.add_node(f"M{i}\n{list(m)}")
         
-        # Ajouter les arcs
-        for M_source, transition, M_dest in transitions_graphe:
-            idx_source = marquages_accessibles[M_source]
-            idx_dest = marquages_accessibles[M_dest]
-            label_source = f"M{idx_source}\n{list(M_source)}"
-            label_dest = f"M{idx_dest}\n{list(M_dest)}"
-            G.add_edge(label_source, label_dest, label=transition)
+        for src, t, dst in arcs:
+            G.add_edge(
+                f"M{marquages[src]}\n{list(src)}",
+                f"M{marquages[dst]}\n{list(dst)}",
+                label=t
+            )
         
-        # Dessiner le graphe
-        plt.figure(figsize=(12, 8))
-        pos = nx.spring_layout(G, k=2, iterations=50)
+        plt.figure(figsize=(14, 10))
+        pos = nx.spring_layout(G, k=2.5, iterations=50, seed=42)
         
-        # Dessiner les nœuds
-        nx.draw_networkx_nodes(G, pos, node_color='lightblue', 
-                              node_size=2000, alpha=0.9)
-        
-        # Dessiner les arcs
-        nx.draw_networkx_edges(G, pos, edge_color='gray', 
-                              arrows=True, arrowsize=20, 
+        nx.draw_networkx_nodes(G, pos, node_color='lightblue', node_size=2500, alpha=0.9)
+        nx.draw_networkx_edges(G, pos, arrows=True, arrowsize=20, edge_color='gray', 
                               arrowstyle='->', connectionstyle='arc3,rad=0.1')
-        
-        # Dessiner les labels des nœuds
         nx.draw_networkx_labels(G, pos, font_size=8, font_weight='bold')
+        nx.draw_networkx_edge_labels(G, pos, nx.get_edge_attributes(G, 'label'), 
+                                     font_size=9, font_color='red')
         
-        # Dessiner les labels des arcs
-        edge_labels = nx.get_edge_attributes(G, 'label')
-        nx.draw_networkx_edge_labels(G, pos, edge_labels, font_size=10)
-        
-        plt.title("Graphe des Marquages Accessibles", fontsize=16, fontweight='bold')
+        plt.title("Graphe des Marquages Accessibles - Producteur/Consommateur", 
+                 fontsize=14, fontweight='bold')
         plt.axis('off')
         plt.tight_layout()
         plt.show()
+    
+    def afficher_matrice(self, matrice, nom):
+        """Affiche une matrice de manière formatée"""
+        print(f"\n{nom}:")
+        for i, ligne in enumerate(matrice):
+            print(f"  {self.P[i]:4} {ligne}")
+
+def test_producteur_consommateur():
+ 
+    # Définition du réseau selon l'image
+    P = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5']
+    T = ['t0', 't1', 't2', 't3', 't4']  # 5 transitions (corrigé)
+    
+    # Marquage initial
+    M0 = [2, 0, 0, 1, 0, 0]
+    
+    # Matrice Pré (consumption) - 6 places x 5 transitions
+    Pre = [
+        [1, 0, 0, 0, 1],     # P0: Producer ready
+        [0, 1, 0, 0, 0],     # P1: Buffer slot 1
+        [0, 0, 1, 0, 0],     # P2: Buffer slot 2
+        [0, 0, 0, 1, 0],     # P3: Consumer ready
+        [0, 1, 1, 0, 0],     # P4: Item in production
+        [0, 0, 0, 1, 1]      # P5: Item being consumed
+    ]
+    
+    # Matrice Post (production) - 6 places x 5 transitions
+    Post = [
+        [0, 0, 0, 0, 1],     # P0: Producer ready
+        [1, 0, 0, 0, 0],     # P1: Buffer slot 1
+        [0, 1, 0, 0, 0],     # P2: Buffer slot 2
+        [0, 0, 0, 0, 1],     # P3: Consumer ready
+        [1, 0, 0, 0, 0],     # P4: Item in production
+        [0, 0, 0, 1, 0]      # P5: Item being consumed
+    ]
+    
+    # Créer le réseau
+    rdp = ReseauDePetri(P, T, Pre, Post, M0)
+    
+    # Afficher les informations
+    print("\n📊 INFORMATIONS SUR LE RÉSEAU")
+    print(f"Places: {P}")
+    print(f"Transitions: {T}")
+    print(f"Marquage initial M0: {M0}")
+    
+    rdp.afficher_matrice(Pre, "Matrice Pré (Consommation)")
+    rdp.afficher_matrice(Post, "Matrice Post (Production)")
+    rdp.afficher_matrice(rdp.C, "Matrice d'Incidence C = Post - Pre")
+    
+    # Test 1: Simulation d'une séquence
+    print("\n" + "▀"*60)
+    print("TEST 1: SIMULATION D'UNE SÉQUENCE")
+    print("▀"*60)
+    
+    sequence = ['t0', 't1', 't2', 't3', 't4']
+    marquages = rdp.RdPSim(sequence)
+    
+    # Test 2: Graphe des marquages accessibles
+    print("\n" + "▀"*60)
+    print("TEST 2: GRAPHE DES MARQUAGES ACCESSIBLES")
+    print("▀"*60)
+    
+    marquages_acc, arcs = rdp.graphe_marquages_accessibles()
+    
+    # Visualisation
+    print("\n🎨 Génération de la visualisation graphique...")
+    rdp.visualiser(marquages_acc, arcs)
+    
+    # Test 3: Vérification avec équation de changement d'état
+    print("\n" + "▀"*60)
+    print("TEST 3: VÉRIFICATION ÉQUATION DE CHANGEMENT D'ÉTAT")
+    print("▀"*60)
+    
+    # Vecteur d'occurrence pour la séquence t0, t1, t2, t3, t4
+    s = [1, 1, 1, 1, 1]  # Chaque transition franchie 1 fois
+    
+    print(f"\nSéquence: {sequence}")
+    print(f"Vecteur d'occurrence s = {s}")
+    print(f"\nÉquation: M' = M0 + C × s")
+    
+    # Calcul M' = M0 + C × s
+    M_final = M0[:]
+    for i in range(len(P)):
+        for j in range(len(T)):
+            M_final[i] += rdp.C[i][j] * s[j]
+    
+    print(f"\nM0 (initial)  = {M0}")
+    print(f"M' (calculé)  = {M_final}")
+    print(f"M' (simulé)   = {marquages[-1]}")
+    print(f"\nRésultat: {'✓ CORRECT !' if M_final == marquages[-1] else '✗ ERREUR'}")
+    
+    print("\n" + "="*60)
+    print("✅ SIMULATION TERMINÉE AVEC SUCCÈS")
+    print("="*60)
 
 
 # ============================================================================
-# EXEMPLE D'UTILISATION - Réseau de Petri du cours (Figure diapo 9)
+# EXÉCUTION
 # ============================================================================
 
-print("╔" + "═" * 58 + "╗")
-print("║" + " " * 10 + "SIMULATION RÉSEAU DE PETRI - EXEMPLE" + " " * 11 + "║")
-print("╚" + "═" * 58 + "╝")
-
-# Définition du réseau (Exemple du cours - diapo 9)
-P = ['P1', 'P2', 'P3', 'P4', 'P5']
-T = ['t1', 't2', 't3', 't4']
-
-# Matrice Pré (5 places x 4 transitions)
-Pre = [
-    [1, 0, 0, 0],  # P1
-    [0, 1, 0, 0],  # P2
-    [0, 0, 1, 0],  # P3
-    [0, 0, 0, 1],  # P4
-    [0, 0, 0, 0]   # P5
-]
-
-# Matrice Post (5 places x 4 transitions)
-Post = [
-    [0, 0, 0, 0],  # P1
-    [1, 0, 0, 0],  # P2
-    [0, 1, 0, 0],  # P3
-    [0, 0, 1, 0],  # P4
-    [0, 0, 0, 1]   # P5
-]
-
-# Marquage initial [P1, P2, P3, P4, P5]
-M0 = [1, 0, 0, 0, 0]
-
-# Créer le réseau de Petri
-rdp = ReseauDePetri(P, T, Pre, Post, M0)
-
-# Afficher les informations du réseau
-print("\nInformations sur le réseau:")
-print(f"Places: {P}")
-print(f"Transitions: {T}")
-print(f"Matrice d'incidence C:\n{rdp.C}")
-
-# ============================================================================
-# TEST 1: Simulation d'une séquence de transitions
-# ============================================================================
-print("\n" + "▀" * 60)
-print("TEST 1: SIMULATION D'UNE SÉQUENCE")
-print("▀" * 60)
-
-sequence = ['t1', 't3', 't4', 't1', 't3', 't4', 't1', 't2']
-marquages = rdp.RdPSim(sequence)
-
-# ============================================================================
-# TEST 2: Génération du graphe des marquages accessibles
-# ============================================================================
-print("\n" + "▀" * 60)
-print("TEST 2: GRAPHE DES MARQUAGES ACCESSIBLES")
-print("▀" * 60)
-
-marquages_acc, transitions_gr = rdp.graphe_marquages_accessibles()
-
-# Visualiser le graphe
-print("\nGénération de la visualisation du graphe...")
-rdp.visualiser_graphe(marquages_acc, transitions_gr)
-
-# ============================================================================
-# TEST 3: Vérification avec l'équation de changement d'état
-# ============================================================================
-print("\n" + "▀" * 60)
-print("TEST 3: ÉQUATION DE CHANGEMENT D'ÉTAT")
-print("▀" * 60)
-
-# Vecteur d'occurrence pour la séquence: t1 t3 t4 t1 t3 t4 t1 t2
-# s_vec = [3, 1, 2, 2] (3 fois t1, 1 fois t2, 2 fois t3, 2 fois t4)
-s_vec = np.array([3, 1, 2, 2])
-
-print(f"Séquence: {sequence}")
-print(f"Vecteur d'occurrence s: {s_vec}")
-print(f"Marquage initial M0: {rdp.M0}")
-
-# Calculer M' = M0 + C * s_vec
-M_final = rdp.M0 + rdp.C @ s_vec
-
-print(f"\nÉquation: M' = M0 + C × s")
-print(f"Marquage final calculé M': {M_final}")
-print(f"Marquage final simulé: {marquages[-1]}")
-print(f"Vérification: {'✓ CORRECT' if np.array_equal(M_final, marquages[-1]) else '✗ ERREUR'}")
-
-print("\n" + "═" * 60)
-print("FIN DE LA SIMULATION")
-print("═" * 60)
+if __name__ == "__main__":
+    test_producteur_consommateur()
